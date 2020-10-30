@@ -7,7 +7,7 @@ import sys
 
 class SimpleTest(unittest.TestCase):
     def test_example_1(self):
-        system = se.SystemElements(True)
+        system = se.SystemElements()
         system.add_element(location=[[0, 0], [3, 4]], EA=5e9, EI=8000)
         system.add_element(location=[[3, 4], [8, 4]], EA=5e9, EI=4000)
         system.q_load(element_id=2, q=-10)
@@ -316,12 +316,13 @@ class SimpleTest(unittest.TestCase):
         ss.add_support_roll(node_id=-1, angle=45)
         ss.q_load(q=-1, element_id=1, direction="element")
         ss.solve()
-        self.assertAlmostEqual(-5, ss.get_node_results_system(1)['Fx'])
-        self.assertAlmostEqual(-5, ss.get_node_results_system(1)['Fy'])
-        self.assertAlmostEqual(-5, ss.get_element_results(1)['N'])
+        self.assertAlmostEqual(-5, ss.get_node_results_system(1)["Fx"])
+        self.assertAlmostEqual(-5, ss.get_node_results_system(1)["Fy"])
+        self.assertAlmostEqual(-5, ss.get_element_results(1)["N"])
 
     def test_deflection_averaging(self):
         from anastruct.fem.examples.ex_26_deflection import ss
+
         ss.solve()
         self.assertTrue(
             np.allclose(
@@ -330,6 +331,86 @@ class SimpleTest(unittest.TestCase):
             )
         )
 
+    def test_truss_single_hinge(self):
+        ss = se.SystemElements(EA=68300, EI=128, mesh=50)
+        ss.add_element(
+            location=[[0.0, 0.0], [2.5, 0.0]],
+            g=0,
+            spring={1: 0, 2: 0},
+        )
+        ss.add_element(
+            location=[[0.0, 0.0], [2.5, 2.0]],
+            g=0,
+            spring={1: 0, 2: 0},
+        )
+        ss.add_element(
+            location=[[2.5, 0.0], [5.0, 0.0]],
+            g=0,
+            spring={1: 0, 2: 0},
+        )
+        ss.add_element(
+            location=[[2.5, 2.0], [2.5, 0.0]],
+            g=0,
+            spring={1: 0, 2: 0},
+        )
+        ss.add_element(
+            location=[[2.5, 2.0], [5.0, 0.0]],
+            g=0,
+            spring={1: 0, 2: 0},
+        )
+        ss.add_support_hinged(node_id=1)
+        ss.add_support_hinged(node_id=4)
+        ss.point_load(Fx=0, Fy=-20.0, node_id=3)
+        ss.solve()
+        self.assertAlmostEqual(-12.5, ss.get_node_results_system(1)["Fx"])
+        self.assertAlmostEqual(-10, ss.get_node_results_system(1)["Fy"])
+        self.assertAlmostEqual(0, ss.get_node_results_system(1)["Ty"])
+        self.assertAlmostEqual(0, ss.get_node_results_system(3)["Ty"])
+
+    def test_multiple_elements_spacing(self):
+        ss = se.SystemElements(EI=5e3, EA=1e5)
+        ss.add_multiple_elements([[0, 0], [10, 0]], 100)
+        ss.add_support_fixed(1)
+        ss.point_load(ss.id_last_node, Fy=-10)
+        ss.solve()
+        self.assertAlmostEqual(2 / 3, ss.get_node_results_system(-1)["uy"])
+
+    def test_vertical_spring(self):
+        ss = se.SystemElements(mesh=250)
+        ss.add_element(
+            location=[(0.0, 0), (10.0, 0)], EA=356000.0, EI=1332.0000000000002
+        )
+        ss.add_support_hinged(node_id=1)
+        ss.add_support_spring(node_id=2, translation=2, k=50, roll=False)
+        ss.q_load(q=-1.0, element_id=1, direction="y")
+        ss.solve()
+        self.assertAlmostEqual(0.1, ss.get_node_results_system(2)["uy"])
+
+    def test_rotational_roller_support(self):
+        ss = se.SystemElements()
+        ss.add_element(location=[(0, 0), (0, 1)])
+        ss.add_support_fixed(node_id=1)
+        ss.add_support_roll(node_id=2, direction="x", rotate=False)
+        ss.q_load(q=-1000, element_id=1, direction="x")
+        ss.point_load(node_id=2, Fy=-100)
+        ss.solve()
+        self.assertAlmostEqual(0.0083333, ss.get_node_results_system(2)["ux"])
+        self.assertAlmostEqual(0.0, ss.get_node_results_system(2)["uy"])
+        self.assertAlmostEqual(0.0, ss.get_node_results_system(2)["phi_y"])
+        self.assertAlmostEqual(166.6667083, ss.get_node_results_system(2)["Ty"])
+
+    def test_rotational_support(self):
+        ss = se.SystemElements()
+        ss.add_element(location=[(0, 0), (1, 0)])
+        ss.add_support_fixed(node_id=1)
+        ss.add_support_rotational(node_id=2)
+        ss.q_load(q=-1000, element_id=1, direction="y")
+        ss.point_load(node_id=2, Fx=-100)
+        ss.solve()
+        self.assertAlmostEqual(0.0066667, ss.get_node_results_system(2)["ux"])
+        self.assertAlmostEqual(0.0083333, ss.get_node_results_system(2)["uy"])
+        self.assertAlmostEqual(0.0, ss.get_node_results_system(2)["phi_y"])
+        self.assertAlmostEqual(-166.6667083, ss.get_node_results_system(2)["Ty"])
 
 
 if __name__ == "__main__":

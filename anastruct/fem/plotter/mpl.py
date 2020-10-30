@@ -1,7 +1,7 @@
 import numpy as np
 import math
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt  # type: ignore
+import matplotlib.patches as mpatches  # type: ignore
 from anastruct.basic import find_nearest, rotate_xy
 from anastruct.fem.plotter.values import (
     PlottingValues,
@@ -60,6 +60,22 @@ class Plotter(PlottingValues):
             )
             self.one_fig.add_patch(support_patch)
 
+    def __rotational_support_patch(self, max_val):
+        """
+        :param max_val: max scale of the plot
+        """
+        width = height = PATCH_SIZE * max_val
+        for node in self.system.supports_rotational:
+            support_patch = mpatches.Rectangle(
+                (node.vertex.x - width * 0.5, -node.vertex.z - width * 0.5),
+                width,
+                height,
+                color="r",
+                zorder=9,
+                fill=False,
+            )
+            self.one_fig.add_patch(support_patch)
+
     def __roll_support_patch(self, max_val):
         """
         :param max_val: max scale of the plot
@@ -68,12 +84,17 @@ class Plotter(PlottingValues):
         count = 0
         for node in self.system.supports_roll:
             direction = self.system.supports_roll_direction[count]
-            x1 = np.cos(np.pi) * radius + node.vertex.x + radius
-            z1 = np.sin(np.pi) * radius + node.vertex.y
-            x2 = np.cos(np.radians(90)) * radius + node.vertex.x + radius
-            z2 = np.sin(np.radians(90)) * radius + node.vertex.y
-            x3 = np.cos(np.radians(270)) * radius + node.vertex.x + radius
-            z3 = np.sin(np.radians(270)) * radius + node.vertex.y
+            rotate = self.system.supports_roll_rotate[count]
+            x1 = np.cos(np.pi) * radius + node.vertex.x + radius  # vertex.x
+            z1 = np.sin(np.pi) * radius + node.vertex.y  # vertex.y
+            x2 = (
+                np.cos(np.radians(90)) * radius + node.vertex.x + radius
+            )  # vertex.x + radius
+            z2 = np.sin(np.radians(90)) * radius + node.vertex.y  # vertex.y + radius
+            x3 = (
+                np.cos(np.radians(270)) * radius + node.vertex.x + radius
+            )  # vertex.x + radius
+            z3 = np.sin(np.radians(270)) * radius + node.vertex.y  # vertex.y - radius
 
             triangle = np.array([[x1, z1], [x2, z2], [x3, z3]])
 
@@ -87,6 +108,17 @@ class Plotter(PlottingValues):
                     triangle[1:, 1] - 0.5 * radius * np.cos(angle),
                     color="r",
                 )
+                if not rotate:
+                    rect_patch = mpatches.RegularPolygon(
+                        (node.vertex.x, node - node.vertex.y),
+                        numVertices=4,
+                        radius=radius,
+                        orientation=angle,
+                        color="r",
+                        zorder=9,
+                        fill=False,
+                    )
+                    self.one_fig.add_patch(rect_patch)
 
             elif direction == 2:  # horizontal roll
                 support_patch = mpatches.RegularPolygon(
@@ -101,6 +133,16 @@ class Plotter(PlottingValues):
                 self.one_fig.plot(
                     [node.vertex.x - radius, node.vertex.x + radius], [y, y], color="r"
                 )
+                if not rotate:
+                    rect_patch = mpatches.Rectangle(
+                        (node.vertex.x - radius / 2, -node.vertex.z - radius / 2),
+                        radius,
+                        radius,
+                        color="r",
+                        zorder=9,
+                        fill=False,
+                    )
+                    self.one_fig.add_patch(rect_patch)
             elif direction == 1:  # vertical roll
                 # translate the support to the node
 
@@ -113,6 +155,16 @@ class Plotter(PlottingValues):
                     [y, y + 2 * radius],
                     color="r",
                 )
+                if not rotate:
+                    rect_patch = mpatches.Rectangle(
+                        (node.vertex.x - radius / 2, -node.vertex.z - radius / 2),
+                        radius,
+                        radius,
+                        color="r",
+                        zorder=9,
+                        fill=False,
+                    )
+                    self.one_fig.add_patch(rect_patch)
             count += 1
 
     def __rotating_spring_support_patch(self, max_val):
@@ -406,6 +458,7 @@ class Plotter(PlottingValues):
         if supports:
             self.__fixed_support_patch(max_plot_range * scale)
             self.__hinged_support_patch(max_plot_range * scale)
+            self.__rotational_support_patch(max_plot_range * scale)
             self.__roll_support_patch(max_plot_range * scale)
             self.__rotating_spring_support_patch(max_plot_range * scale)
             self.__spring_support_patch(max_plot_range * scale)
@@ -460,7 +513,7 @@ class Plotter(PlottingValues):
         digits=2,
         node_results=True,
         fill_polygon=True,
-        color=0
+        color=0,
     ):
         if fill_polygon:
             rec = plt.Polygon(
@@ -507,7 +560,11 @@ class Plotter(PlottingValues):
                 axis_values = plot_values_axial_force(el, factor)
                 color = 1 if el.N_1 < 0 else 0
                 self.plot_result(
-                    axis_values, el.N_1, el.N_2, node_results=not bool(verbosity), color=color
+                    axis_values,
+                    el.N_1,
+                    el.N_2,
+                    node_results=not bool(verbosity),
+                    color=color,
                 )
 
                 point = (el.vertex_2 - el.vertex_1) / 2 + el.vertex_1
